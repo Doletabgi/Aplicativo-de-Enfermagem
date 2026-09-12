@@ -1,0 +1,38 @@
+export const STATUS_CONFIG = {
+  sem_dados: {
+    label: "Sem dados",
+    color: "bg-slate-400 dark:bg-slate-500",
+    textColor: "text-slate-600 dark:text-slate-300",
+    bgLight: "bg-slate-100 dark:bg-slate-800/80",
+    border: "border-slate-200 dark:border-slate-700",
+    badge: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700",
+    dot: "bg-slate-400 dark:bg-slate-500",
+  },
+  estavel: {
+    label: "Estável",
+    color: "bg-emerald-600 dark:bg-emerald-500",
+    textColor: "text-emerald-700 dark:text-emerald-300",
+    bgLight: "bg-emerald-50 dark:bg-emerald-950/40",
+    border: "border-emerald-200 dark:border-emerald-800/60",
+    badge: "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60",
+    dot: "bg-emerald-600 dark:bg-emerald-400",
+  },
+  atencao: {
+    label: "Atenção",
+    color: "bg-amber-600 dark:bg-amber-500",
+    textColor: "text-amber-700 dark:text-amber-300",
+    bgLight: "bg-amber-50 dark:bg-amber-950/40",
+    border: "border-amber-200 dark:border-amber-800/60",
+    badge: "bg-amber-50 text-amber-900 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60",
+    dot: "bg-amber-500 dark:bg-amber-400",
+  },
+  critico: {
+    label: "Crítico",
+    color: "bg-rose-600 dark:bg-rose-500",
+    textColor: "text-rose-700 dark:text-rose-300",
+    bgLight: "bg-rose-50 dark:bg-rose-950/40",
+    border: "border-rose-200 dark:border-rose-800/60",
+    badge: "bg-rose-50 text-rose-800 dark:bg-rose-950/50 dark:text-rose-200 border border-rose-200/80 dark:border-rose-800/60",
+    dot: "bg-rose-600 dark:bg-rose-400",
+  },
+} as const;

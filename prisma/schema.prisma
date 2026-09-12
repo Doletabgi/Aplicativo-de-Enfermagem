@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Patient {
+  id               String       @id @default(cuid())
+  name             String
+  birthDate        String
+  gender           String
+  bed              String       @default("")
+  diagnosis        String       @default("")
+  allergies        String       @default("")
+  emergencyContact String       @default("")
+  emergencyPhone   String       @default("")
+  photo            String       @default("")
+  admissionDate    String
+  dischargeDate    String?
+  active           Boolean      @default(true)
+  priority         Boolean      @default(false)
+  condition        String       @default("")
+  createdAt        DateTime     @default(now())
+  vitalSigns       VitalSign[]
+  medications      Medication[]
+  nursingNotes     NursingNote[]
+}
+
+model VitalSign {
+  id         String   @id @default(cuid())
+  patientId  String
+  patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  type       String
+  value      Float
+  systolic   Int?
+  diastolic  Int?
+  unit       String
+  recordedAt DateTime @default(now())
+}
+
+model Medication {
+  id              String    @id @default(cuid())
+  patientId       String
+  patient         Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  name            String
+  dose            String
+  schedule        String
+  frequencyHours  Int?
+  administered    Boolean   @default(false)
+  administeredAt  DateTime?
+  observation     String    @default("")
+  createdAt       DateTime  @default(now())
+}
+
+model NursingNote {
+  id        String   @id @default(cuid())
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  sessions  Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model TeamMember {
+  id          String           @id @default(cuid())
+  name        String
+  role        String           @default("Enfermeiro")
+  color       String           @default("#3b82f6")
+  shift       String           @default("MANHA")
+  team        String           @default("")
+  isCover     Boolean          @default(false)
+  gender      String           @default("")
+  horarioFixo String           @default("")
+  active      Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+}
+
+model FixedArchive {
+  id      String   @id @default(cuid())
+  scale   String   @default("6x1")
+  month   String
+  data    String?
+  savedAt DateTime @default(now())
+
+  @@unique([scale, month])
+}
+
+model Scale6x1 {
+  id      String   @id @default(cuid())
+  month   String   @unique
+  data    String
+  savedAt DateTime @default(now())
+}
+
+model Settings {
+  id              String  @id @default("global")
+  hospitalName    String  @default("")
+  defaultWhatsapp String  @default("")
+  pin             String  @default("")
+}
