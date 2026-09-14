@@ -227,6 +227,10 @@ export async function getNursingReport(input: {
 
 REGRA ABSOLUTA: é preferível deixar uma seção incompleta a inventar qualquer dado (nome, idade, sintoma, medicação, horário, conduta, valor). Nunca presuma um dado "porque faz sentido clinicamente" — isso é proibido.
 
+Use APENAS terminologia técnica de enfermagem amplamente consolidada e reconhecida (ex: posição de Fowler, decúbito dorsal, decúbito lateral). NUNCA invente ou combine termos técnicos que não sejam de uso corrente e validado — na dúvida, descreva de forma simples e genérica em vez de usar um termo técnico impreciso.
+
+Na seção "EVOLUÇÃO CLÍNICA", NÃO repita os valores numéricos exatos dos sinais vitais (que já aparecem em detalhe na seção SINAIS VITAIS logo abaixo) — a Evolução Clínica deve descrever o quadro de forma qualitativa e textual (ex: "mantém-se febril, com discreta taquipneia e saturação limítrofe"), sem repetir os números crus.
+
 DADOS DO PACIENTE (use exatamente como fornecido, sem alterar nome/idade/sexo):
 - Nome: ${input.patientName || "Não informado"}
 - Idade: ${input.age || "Não informado"}
@@ -245,7 +249,7 @@ IDENTIFICAÇÃO DO PACIENTE
 [nome, idade, sexo e diagnóstico, apenas como informado acima]
 
 EVOLUÇÃO CLÍNICA
-[apenas o que puder ser descrito a partir do diagnóstico e dos dados fornecidos; não crie sintomas, secreções, aspecto ou detalhes que não constem nos dados]
+[apenas o que puder ser descrito a partir do diagnóstico e dos dados fornecidos; não crie sintomas, secreções, aspecto ou detalhes que não constem nos dados. Não repita os números dos sinais vitais aqui, descreva o quadro apenas de forma qualitativa e textual]
 
 SINAIS VITAIS
 [liste apenas os valores fornecidos em SINAIS VITAIS RECENTES; se a seção veio como "Sem registros", escreva "Não informado"]
@@ -261,7 +265,7 @@ ORIENTAÇÕES E OBSERVAÇÕES
 
 Escreva em linguagem técnica de enfermagem, texto corrido, objetivo e profissional, sem listas numeradas extensas. Máximo de 300 palavras. Novamente: se um dado não foi fornecido, escreva "Não informado" nesse campo — nunca substitua por suposição.`;
 
-  const text = await callGroq(prompt, 900);
+  const text = await callGroq(prompt, 1300);
   return text
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/^RELATÓRIO DE ENFERMAGEM\s*/i, "")

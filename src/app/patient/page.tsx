@@ -8,7 +8,7 @@ import {
   HeartPulse, Phone, AlertTriangle, Trash2, LogOut, Edit3,
   Plus, Check, Clock, X, Send, Camera, Sparkles, RefreshCw, Bot,
   ClipboardList, Copy, Save, ChevronRight, Bed, Calendar, CheckCircle2,
-  AlertCircle, ShieldAlert, Bell, Share2, Mic, MicOff
+  AlertCircle, ShieldAlert, Bell, Share2, Mic, MicOff, Eye, EyeOff
 } from "lucide-react";
 import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
 import {
@@ -136,6 +136,29 @@ function PatientDetailContent() {
   const [noteLoading, setNoteLoading] = useState(false);
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [editNoteContent, setEditNoteContent] = useState("");
+  const [hiddenNoteIds, setHiddenNoteIds] = useState<Set<string>>(new Set());
+
+  const areAllNotesHidden = notes.length > 0 && notes.every((n) => hiddenNoteIds.has(n.id));
+
+  const toggleAllNotes = () => {
+    if (areAllNotesHidden) {
+      setHiddenNoteIds(new Set());
+    } else {
+      setHiddenNoteIds(new Set(notes.map((n) => n.id)));
+    }
+  };
+
+  const toggleNote = (noteId: string) => {
+    setHiddenNoteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(noteId)) {
+        next.delete(noteId);
+      } else {
+        next.add(noteId);
+      }
+      return next;
+    });
+  };
   const [showDischargeConfirm, setShowDischargeConfirm] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -2170,6 +2193,39 @@ function PatientDetailContent() {
             </div>
           </form>
 
+          {/* Barra de controle dos relatórios salvos: Contagem e Botão Ocultar / Desocultar Todos */}
+          {notes.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 px-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Relatórios e Evoluções Salvas
+                </span>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200/80 dark:border-slate-700">
+                  {notes.length} {notes.length === 1 ? "registro" : "registros"}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={toggleAllNotes}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#111927] hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 transition-colors shadow-2xs self-start sm:self-auto cursor-pointer"
+                title={areAllNotesHidden ? "Desocultar todos os relatórios salvos" : "Ocultar todos os relatórios salvos"}
+              >
+                {areAllNotesHidden ? (
+                  <>
+                    <Eye size={14} className="text-teal-600 dark:text-teal-400" />
+                    <span className="text-teal-700 dark:text-teal-400 font-bold">Desocultar Todos ({notes.length})</span>
+                  </>
+                ) : (
+                  <>
+                    <EyeOff size={14} className="text-slate-500" />
+                    <span>Ocultar Todos os Relatórios</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
           {notes.length === 0 ? (
             <div className="text-center py-12 glass-panel rounded-3xl">
               <FileText size={32} className="mx-auto text-slate-400 mb-2" />
@@ -2178,65 +2234,117 @@ function PatientDetailContent() {
             </div>
           ) : (
             <div className="space-y-3.5">
-              {notes.map((note) => (
-                <div key={note.id} className="glass-panel rounded-2xl p-5 shadow-xs transition-all hover:border-slate-300 dark:hover:border-slate-700">
-                  {editingNote === note.id ? (
-                    <div className="space-y-3">
-                      <textarea
-                        value={editNoteContent}
-                        onChange={(e) => setEditNoteContent(e.target.value)}
-                        rows={3}
-                        maxLength={2000}
-                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/50 resize-none text-slate-900 dark:text-white"
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setEditingNote(null)}
-                          className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400"
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          onClick={() => handleEditNote(note.id)}
-                          className="px-4 py-2 bg-teal-700 hover:bg-teal-600 active:bg-teal-800 text-white rounded-lg text-xs font-bold transition-colors shadow-xs"
-                        >
-                          Salvar
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                        <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 font-mono">
-                          {new Date(note.createdAt).toLocaleString("pt-BR")}
-                        </span>
-                        <div className="flex items-center gap-1">
+              {notes.map((note) => {
+                const isHidden = hiddenNoteIds.has(note.id);
+
+                return (
+                  <div key={note.id} className="glass-panel rounded-2xl p-4 sm:p-5 shadow-xs transition-all hover:border-slate-300 dark:hover:border-slate-700">
+                    {editingNote === note.id ? (
+                      <div className="space-y-3">
+                        <textarea
+                          value={editNoteContent}
+                          onChange={(e) => setEditNoteContent(e.target.value)}
+                          rows={4}
+                          maxLength={2000}
+                          className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/50 resize-none text-slate-900 dark:text-white"
+                        />
+                        <div className="flex gap-2">
                           <button
-                            onClick={() => {
-                              setEditingNote(note.id);
-                              setEditNoteContent(note.content);
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-blue-500 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                            title="Editar"
+                            onClick={() => setEditingNote(null)}
+                            className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400"
                           >
-                            <Edit3 size={14} />
+                            Cancelar
                           </button>
                           <button
-                            onClick={() => handleDeleteNote(note.id)}
-                            className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                            title="Excluir"
+                            onClick={() => handleEditNote(note.id)}
+                            className="px-4 py-2 bg-teal-700 hover:bg-teal-600 active:bg-teal-800 text-white rounded-lg text-xs font-bold transition-colors shadow-xs"
                           >
-                            <Trash2 size={14} />
+                            Salvar
                           </button>
                         </div>
                       </div>
-                      <p className="text-sm text-slate-800 dark:text-slate-200 mt-2.5 whitespace-pre-line leading-relaxed">
-                        {note.content}
-                      </p>
-                    </>
-                  )}
-                </div>
-              ))}
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 font-mono">
+                              {new Date(note.createdAt).toLocaleString("pt-BR")}
+                            </span>
+                            {isHidden && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                Ocultado
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {/* Botão Ocultar / Desocultar Individual */}
+                            <button
+                              type="button"
+                              onClick={() => toggleNote(note.id)}
+                              className={`px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                                isHidden
+                                  ? "bg-teal-50 dark:bg-teal-950/50 border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 hover:bg-teal-100"
+                                  : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                              }`}
+                              title={isHidden ? "Desocultar relatório completo" : "Ocultar relatório"}
+                            >
+                              {isHidden ? (
+                                <>
+                                  <Eye size={13} className="text-teal-600 dark:text-teal-400" />
+                                  <span className="font-bold">Desocultar</span>
+                                </>
+                              ) : (
+                                <>
+                                  <EyeOff size={13} className="text-slate-400" />
+                                  <span>Ocultar</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setEditingNote(note.id);
+                                setEditNoteContent(note.content);
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-blue-500 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                              title="Editar"
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteNote(note.id)}
+                              className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                              title="Excluir"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Conteúdo: Ocultado vs Expandido */}
+                        {isHidden ? (
+                          <div
+                            onClick={() => toggleNote(note.id)}
+                            className="mt-2.5 p-3 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700/80 cursor-pointer hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors"
+                            title="Toque para desocultar este relatório"
+                          >
+                            <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 italic">
+                              &ldquo;{note.content.split("\n")[0] || note.content}&rdquo;...
+                            </p>
+                            <p className="text-[11px] text-teal-600 dark:text-teal-400 font-semibold mt-1.5 flex items-center gap-1">
+                              <Eye size={12} /> Toque para desocultar o relatório completo
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-slate-800 dark:text-slate-200 mt-2.5 whitespace-pre-line leading-relaxed">
+                            {note.content}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

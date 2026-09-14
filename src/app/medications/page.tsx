@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   Pill, Clock, Check, ChevronRight, RefreshCw, User, AlertCircle,
   Search, X, CheckCircle2, AlertTriangle, Bell, Plus, FileText, CheckCircle,
-  Calendar, BedDouble, Filter, MessageSquare, Sparkles, Mic, MicOff, ShieldAlert, History, Trash2
+  Calendar, BedDouble, Filter, MessageSquare, Sparkles, Mic, MicOff, ShieldAlert, History, Trash2, Pencil
 } from "lucide-react";
 import {
   listMedicationsToday,
@@ -84,6 +84,18 @@ export default function MedicationsPage() {
   const [formObservation, setFormObservation] = useState("");
   const [formSaving, setFormSaving] = useState(false);
 
+  // Modal "Editar Medicação"
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [medToEdit, setMedToEdit] = useState<TodayMedication | null>(null);
+  const [editPatientId, setEditPatientId] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editDose, setEditDose] = useState("");
+  const [editSchedule, setEditSchedule] = useState("08:00");
+  const [editFrequency, setEditFrequency] = useState("8");
+  const [editObservation, setEditObservation] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [activeEditVoiceField, setActiveEditVoiceField] = useState<"name" | "dose" | "schedule" | "observation" | null>(null);
+
   // Bloqueio de Medicação por Alergia / Quadro Clínico
   const [allergyBlockModal, setAllergyBlockModal] = useState<{
     open: boolean;
@@ -96,6 +108,9 @@ export default function MedicationsPage() {
 
   const formSelectedPatient = patients.find((p) => p.id === formPatientId);
   const formAllergyConflict = checkMedicationAllergyConflict(formName, formSelectedPatient);
+
+  const editSelectedPatient = patients.find((p) => p.id === editPatientId);
+  const editAllergyConflict = checkMedicationAllergyConflict(editName, editSelectedPatient);
 
   // Voz / Microfone para cadastro de medicação
   const [activeVoiceField, setActiveVoiceField] = useState<"name" | "dose" | "schedule" | "observation" | null>(null);
@@ -162,6 +177,32 @@ export default function MedicationsPage() {
     });
   };
 
+  const toggleEditFieldVoice = (field: "name" | "dose" | "schedule" | "observation") => {
+    if (activeEditVoiceField === field) {
+      fieldMedSpeech.stopListening();
+      setActiveEditVoiceField(null);
+      return;
+    }
+    setActiveEditVoiceField(field);
+    fieldMedSpeech.resetTranscript();
+    fieldMedSpeech.startListening({
+      onFinalText: (spokenText) => {
+        const text = spokenText.trim();
+        if (field === "name") {
+          setEditName(normalizeSpokenMedication(text));
+        } else if (field === "dose") {
+          setEditDose(normalizeSpokenMedication(text));
+        } else if (field === "schedule") {
+          const parsedTime = parseSpokenTime(text);
+          if (parsedTime) setEditSchedule(parsedTime);
+        } else if (field === "observation") {
+          setEditObservation(normalizeSpokenMedication(text));
+        }
+        setActiveEditVoiceField(null);
+      },
+    });
+  };
+
   useEffect(() => {
     if (!newMedModalOpen) {
       fullMedSpeech.stopListening();
@@ -170,6 +211,13 @@ export default function MedicationsPage() {
       setActiveVoiceField(null);
     }
   }, [newMedModalOpen]);
+
+  useEffect(() => {
+    if (!editModalOpen) {
+      fieldMedSpeech.stopListening();
+      setActiveEditVoiceField(null);
+    }
+  }, [editModalOpen]);
 
   // Modal Checagem / Observação da Dose
   const [obsModalMed, setObsModalMed] = useState<TodayMedication | null>(null);
@@ -532,6 +580,79 @@ export default function MedicationsPage() {
     }
   };
 
+  const handleOpenEditModal = (m: TodayMedication) => {
+    setMedToEdit(m);
+    setEditPatientId(m.patientId);
+    setEditName(m.name);
+    setEditDose(m.dose);
+    const timeMatch = m.schedule.match(/(\d{2}:\d{2})/);
+    setEditSchedule(timeMatch ? timeMatch[1] : (m.schedule || "08:00"));
+    setEditFrequency(m.frequencyHours != null ? String(m.frequencyHours) : "");
+    setEditObservation(m.observation || "");
+    setEditModalOpen(true);
+  };
+
+  const handleUpdateMedication = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!medToEdit) return;
+    if (!editPatientId || !editName.trim() || !editDose.trim() || !editSchedule.trim()) {
+      alert("Por favor selecione o paciente e preencha nome do medicamento, dose e horário.");
+      return;
+    }
+
+    const targetPatient = patients.find((p) => p.id === editPatientId);
+
+    // Verificação de Segurança Clínica: Bloqueio por Alergia no Quadro Clínico
+    const conflict = checkMedicationAllergyConflict(editName, targetPatient);
+    if (conflict.hasConflict) {
+      setAllergyBlockModal({
+        open: true,
+        medName: editName.trim(),
+        matchedTerm: conflict.matchedTerm || editName.trim(),
+        rawAllergy: conflict.rawAllergyText || targetPatient?.allergies || "Alergia registrada",
+        patientName: targetPatient?.name || "Paciente",
+        source: conflict.source || "allergies",
+      });
+      return;
+    }
+
+    setEditSaving(true);
+    try {
+      const freqNum = editFrequency ? parseInt(editFrequency, 10) : null;
+      const validFreq = freqNum && freqNum >= 1 ? freqNum : null;
+
+      const updated = await updateMedication(medToEdit.id, {
+        patientId: editPatientId,
+        name: editName.trim(),
+        dose: editDose.trim(),
+        schedule: editSchedule.trim(),
+        frequencyHours: validFreq,
+        observation: editObservation.trim(),
+      });
+
+      // Cancela notificações antigas e reagenda se ainda não foi administrada
+      await cancelMedicationNotification(medToEdit.id);
+      if (!updated.administered && targetPatient) {
+        await scheduleMedicationNotification(updated, {
+          id: targetPatient.id,
+          name: targetPatient.name,
+          bed: targetPatient.bed,
+          active: targetPatient.active,
+        });
+      }
+
+      await load(true);
+      setEditModalOpen(false);
+      setMedToEdit(null);
+      showFeedbackToast(`Medicação ${updated.name} atualizada com sucesso!`);
+    } catch (err) {
+      console.error("Erro ao atualizar medicação:", err);
+      alert("Falha ao salvar alterações da medicação.");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const total = meds.length;
   const pendentes = meds.filter((m) => !m.administered).length;
   const atrasadas = meds.filter((m) => getMedStatus(m) === "atrasado").length;
@@ -875,6 +996,15 @@ export default function MedicationsPage() {
                       </button>
                       <button
                         type="button"
+                        onClick={() => handleOpenEditModal(m)}
+                        className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-teal-700 dark:hover:text-teal-400 flex items-center gap-1 min-h-[38px] transition-colors"
+                        title="Editar esta medicação"
+                      >
+                        <Pencil size={13} className="text-slate-500" />
+                        Editar
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => setMedToDelete(m)}
                         className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-1 min-h-[38px] transition-colors"
                         title="Excluir esta medicação do paciente"
@@ -1014,6 +1144,14 @@ export default function MedicationsPage() {
                               title="Editar observação da checagem"
                             >
                               <MessageSquare size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditModal(m)}
+                              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-teal-700 dark:hover:text-teal-400 transition-colors"
+                              title="Editar medicação"
+                            >
+                              <Pencil size={14} />
                             </button>
                             <button
                               type="button"
@@ -1495,6 +1633,331 @@ export default function MedicationsPage() {
                     <>
                       {formSaving ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
                       Salvar Medicação
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Editar Medicação */}
+      {editModalOpen && medToEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white dark:bg-[#111927] rounded-2xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-5 sm:p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 flex items-center justify-center">
+                  <Pencil size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    Editar Medicação
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {medToEdit.name} · {medToEdit.patientBed ? `Leito ${medToEdit.patientBed}` : "Sem leito"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                aria-label="Fechar modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateMedication} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Paciente Internado *
+                </label>
+                <select
+                  value={editPatientId}
+                  onChange={(e) => setEditPatientId(e.target.value)}
+                  required
+                  className="w-full py-2 px-3 bg-white dark:bg-[#162032] border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white min-h-[42px]"
+                >
+                  {patients.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.bed ? `[Leito ${p.bed}] ` : ""}{p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Nome do Medicamento *
+                    </label>
+                    {activeEditVoiceField === "name" && (
+                      <span className="text-[10px] font-semibold text-rose-600 animate-pulse">
+                        Ouvindo nome...
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Dipirona 500mg/ml"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className={`w-full py-2 pl-3 pr-10 bg-white dark:bg-[#162032] border rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white min-h-[42px] ${
+                        editAllergyConflict.hasConflict
+                          ? "border-rose-500 ring-2 ring-rose-500/30"
+                          : "border-slate-200 dark:border-slate-700"
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleEditFieldVoice("name")}
+                      className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-colors ${
+                        activeEditVoiceField === "name"
+                          ? "bg-rose-500 text-white animate-pulse shadow-xs"
+                          : "text-slate-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                      }`}
+                      title="Ditar nome do medicamento"
+                    >
+                      <Mic size={15} />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Dose / Posologia *
+                    </label>
+                    {activeEditVoiceField === "dose" && (
+                      <span className="text-[10px] font-semibold text-rose-600 animate-pulse">
+                        Ouvindo dose...
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: 2 mL EV ou 1 comp VO"
+                      value={editDose}
+                      onChange={(e) => setEditDose(e.target.value)}
+                      className="w-full py-2 pl-3 pr-10 bg-white dark:bg-[#162032] border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white min-h-[42px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleEditFieldVoice("dose")}
+                      className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-colors ${
+                        activeEditVoiceField === "dose"
+                          ? "bg-rose-500 text-white animate-pulse shadow-xs"
+                          : "text-slate-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                      }`}
+                      title="Ditar dose e via"
+                    >
+                      <Mic size={15} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Horário Programado *
+                    </label>
+                    {activeEditVoiceField === "schedule" && (
+                      <span className="text-[10px] font-semibold text-rose-600 animate-pulse">
+                        Diga ex: 14 horas
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="time"
+                      required
+                      value={editSchedule}
+                      onChange={(e) => setEditSchedule(e.target.value)}
+                      className="flex-1 py-2 px-3 bg-white dark:bg-[#162032] border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white min-h-[42px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleEditFieldVoice("schedule")}
+                      className={`p-2 rounded-xl border min-h-[42px] min-w-[42px] flex items-center justify-center transition-colors ${
+                        activeEditVoiceField === "schedule"
+                          ? "bg-rose-500 text-white border-rose-600 animate-pulse shadow-xs"
+                          : "border-slate-200 dark:border-slate-700 text-slate-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                      }`}
+                      title="Ditar horário"
+                    >
+                      <Mic size={16} />
+                    </button>
+                  </div>
+                  <div className="flex gap-1 mt-1.5 flex-wrap">
+                    {["06:00", "08:00", "12:00", "14:00", "18:00", "20:00", "22:00"].map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setEditSchedule(t)}
+                        className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-teal-100 dark:hover:bg-teal-900"
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Frequência / Intervalo (horas)
+                    </label>
+                    <span className="text-[11px] font-semibold text-teal-700 dark:text-teal-400">
+                      {editFrequency && Number(editFrequency) >= 1
+                        ? `A cada ${editFrequency}h (${Math.floor(24 / Number(editFrequency))}x/dia)`
+                        : "Dose única / Se necessário"}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={1}
+                      max={48}
+                      step={1}
+                      placeholder="Ex: 8 (para 8 em 8h) ou vazio"
+                      value={editFrequency}
+                      onChange={(e) => setEditFrequency(e.target.value)}
+                      className="w-full py-2 px-3 bg-white dark:bg-[#162032] border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white min-h-[42px] focus:ring-2 focus:ring-teal-500 focus:outline-hidden font-mono"
+                    />
+                    {editFrequency !== "" && (
+                      <button
+                        type="button"
+                        onClick={() => setEditFrequency("")}
+                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
+                        title="Limpar (Dose única/SN)"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  {editFrequency !== "" && Number(editFrequency) < 1 && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium mt-1 flex items-center gap-1">
+                      <AlertCircle size={12} />
+                      Intervalo mínimo de 1 hora
+                    </p>
+                  )}
+
+                  <div className="flex gap-1 mt-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setEditFrequency("")}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-medium transition-colors ${
+                        editFrequency === ""
+                          ? "bg-teal-600 text-white font-bold"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-teal-100 dark:hover:bg-teal-900"
+                      }`}
+                    >
+                      Dose única/SN
+                    </button>
+                    {["2", "3", "4", "6", "8", "12", "24"].map((h) => (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => setEditFrequency(h)}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-mono transition-colors ${
+                          editFrequency === h
+                            ? "bg-teal-600 text-white font-bold"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-teal-100 dark:hover:bg-teal-900"
+                        }`}
+                      >
+                        {h}h
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Observações / Recomendações
+                  </label>
+                  {activeEditVoiceField === "observation" && (
+                    <span className="text-[10px] font-semibold text-rose-600 animate-pulse">
+                      Ouvindo observações...
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <textarea
+                    rows={2}
+                    placeholder="Ex: Administrar diluído em 100ml de SF 0.9% correr em 30min"
+                    value={editObservation}
+                    onChange={(e) => setEditObservation(e.target.value)}
+                    className="w-full py-2 pl-3 pr-10 bg-white dark:bg-[#162032] border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => toggleEditFieldVoice("observation")}
+                    className={`absolute right-2 top-3 p-1.5 rounded-lg transition-colors ${
+                      activeEditVoiceField === "observation"
+                        ? "bg-rose-500 text-white animate-pulse shadow-xs"
+                        : "text-slate-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                    }`}
+                    title="Ditar observações"
+                  >
+                    <Mic size={15} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Banner de Bloqueio por Alergia */}
+              {editAllergyConflict.hasConflict && (
+                <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/70 border-2 border-rose-500 text-rose-800 dark:text-rose-200 space-y-1.5 animate-fade-in shadow-xs">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={18} className="text-rose-600 dark:text-rose-400 shrink-0" />
+                    <span className="font-bold text-xs uppercase tracking-wide text-rose-700 dark:text-rose-300">
+                      Bloqueio de Segurança: Alergia Conhecida!
+                    </span>
+                  </div>
+                  <p className="text-xs text-rose-700 dark:text-rose-300 leading-relaxed pl-6">
+                    O paciente <strong>{editSelectedPatient?.name}</strong> possui registro de alergia a <strong>&quot;{editAllergyConflict.matchedTerm}&quot;</strong> no Quadro Clínico ({editAllergyConflict.source === "allergies" ? "Alergias" : "Diagnóstico"}).
+                    A alteração para esta medicação está <strong>bloqueada pelo sistema</strong>.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 min-h-[42px]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSaving || editAllergyConflict.hasConflict}
+                  className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs min-h-[42px] disabled:opacity-50 inline-flex items-center gap-2 ${
+                    editAllergyConflict.hasConflict
+                      ? "bg-rose-700 text-white cursor-not-allowed opacity-90 shadow-none"
+                      : "bg-teal-700 hover:bg-teal-600 active:bg-teal-800 text-white cursor-pointer"
+                  }`}
+                >
+                  {editAllergyConflict.hasConflict ? (
+                    <>
+                      <ShieldAlert size={14} />
+                      Bloqueado por Alergia
+                    </>
+                  ) : (
+                    <>
+                      {editSaving ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                      Salvar Alterações
                     </>
                   )}
                 </button>

@@ -34,6 +34,15 @@ export function NursingAIChat({ className = "h-[490px]" }: { className?: string 
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [fontSizeLevel, setFontSizeLevel] = useState<"sm" | "md" | "lg">(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("nursing_ai_chat_fontsize");
+        if (saved === "sm" || saved === "md" || saved === "lg") return saved;
+      } catch {}
+    }
+    return "md";
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Reconhecimento de voz integrado
@@ -118,6 +127,22 @@ export function NursingAIChat({ className = "h-[490px]" }: { className?: string 
     }
   };
 
+  const cycleFontSize = () => {
+    const next: "sm" | "md" | "lg" =
+      fontSizeLevel === "sm" ? "md" : fontSizeLevel === "md" ? "lg" : "sm";
+    setFontSizeLevel(next);
+    try {
+      localStorage.setItem("nursing_ai_chat_fontsize", next);
+    } catch {}
+  };
+
+  const aiFontSizeClass =
+    fontSizeLevel === "sm"
+      ? "text-sm sm:text-[15px] leading-relaxed"
+      : fontSizeLevel === "lg"
+      ? "text-lg sm:text-xl leading-relaxed"
+      : "text-base sm:text-[17px] leading-relaxed";
+
   return (
     <div className={`bg-white dark:bg-[#111927] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 flex flex-col justify-between shadow-xs ${className}`}>
       {/* Header do Quadro */}
@@ -144,18 +169,32 @@ export function NursingAIChat({ className = "h-[490px]" }: { className?: string 
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleReset}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          title="Reiniciar conversa"
-        >
-          <RotateCcw size={15} />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={cycleFontSize}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors"
+            title="Ajustar tamanho da fonte das respostas da IA"
+          >
+            <span className="font-bold text-[11px]">Fonte</span>
+            <span className="text-[10px] font-bold px-1 py-0.2 rounded bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border border-teal-200/50 dark:border-teal-800/40">
+              {fontSizeLevel === "sm" ? "A" : fontSizeLevel === "md" ? "A+" : "A++"}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleReset}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            title="Reiniciar conversa"
+          >
+            <RotateCcw size={15} />
+          </button>
+        </div>
       </div>
 
       {/* Histórico de Mensagens */}
-      <div className="flex-1 overflow-y-auto pr-1 my-3 space-y-3 text-xs">
+      <div className="flex-1 overflow-y-auto pr-1 my-3 space-y-3">
         {messages.map((m, idx) => {
           const isUser = m.role === "user";
           return (
@@ -164,15 +203,15 @@ export function NursingAIChat({ className = "h-[490px]" }: { className?: string 
               className={`flex items-start gap-2 ${isUser ? "justify-end" : "justify-start"}`}
             >
               {!isUser && (
-                <div className="w-6 h-6 rounded-full bg-teal-100 dark:bg-teal-950/80 text-teal-800 dark:text-teal-300 flex items-center justify-center shrink-0 mt-0.5 border border-teal-200/40">
-                  <Stethoscope size={13} />
+                <div className="w-7 h-7 rounded-full bg-teal-100 dark:bg-teal-950/80 text-teal-800 dark:text-teal-300 flex items-center justify-center shrink-0 mt-0.5 border border-teal-200/40">
+                  <Stethoscope size={14} />
                 </div>
               )}
               <div
                 className={`px-3.5 py-2.5 rounded-2xl max-w-[88%] leading-relaxed ${
                   isUser
-                    ? "bg-teal-800 dark:bg-teal-700 text-white rounded-tr-xs shadow-xs"
-                    : "bg-slate-100 dark:bg-slate-800/90 text-slate-800 dark:text-slate-100 rounded-tl-xs border border-slate-200/60 dark:border-slate-700/60 whitespace-pre-wrap"
+                    ? "bg-teal-800 dark:bg-teal-700 text-white rounded-tr-xs shadow-xs text-sm"
+                    : `bg-slate-100 dark:bg-slate-800/90 text-slate-800 dark:text-slate-100 rounded-tl-xs border border-slate-200/60 dark:border-slate-700/60 whitespace-pre-wrap font-normal ${aiFontSizeClass}`
                 }`}
               >
                 {m.content}
@@ -240,7 +279,7 @@ export function NursingAIChat({ className = "h-[490px]" }: { className?: string 
                 ? "Ouvindo sua dúvida clínica..."
                 : "Pergunte sobre procedimentos, doses, NANDA..."
             }
-            className={`w-full bg-slate-50 dark:bg-slate-900 border rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 ${
+            className={`w-full bg-slate-50 dark:bg-slate-900 border rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 ${
               isListening ? "border-rose-400 dark:border-rose-500 bg-rose-50/30" : "border-slate-200 dark:border-slate-700"
             }`}
           />

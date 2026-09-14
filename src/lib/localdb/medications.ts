@@ -228,7 +228,7 @@ export async function createMedication(data: CreateMedicationInput): Promise<Med
 
 export async function updateMedication(
   id: string,
-  data: Partial<Omit<CreateMedicationInput, "patientId">>
+  data: Partial<CreateMedicationInput>
 ): Promise<Medication> {
   const db = await getDb();
   const baseId = id.includes("__") ? id.split("__")[0] : id;
@@ -236,6 +236,7 @@ export async function updateMedication(
   const fields: string[] = [];
   const params: unknown[] = [];
 
+  if (data.patientId !== undefined) { fields.push("patientId = ?"); params.push(data.patientId); }
   if (data.name !== undefined) { fields.push("name = ?"); params.push(data.name); }
   if (data.dose !== undefined) { fields.push("dose = ?"); params.push(data.dose); }
   if (data.schedule !== undefined) { fields.push("schedule = ?"); params.push(data.schedule); }

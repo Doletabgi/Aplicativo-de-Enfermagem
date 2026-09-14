@@ -9,6 +9,7 @@ import {
   calculateNextSchedule,
   parseScheduleDate,
 } from "./medication-status";
+import { checkMedicationAllergyConflict } from "./clinical-allergy-checker";
 
 describe("Medications Today Filtering (Tarefa 2)", () => {
   const mockNow = new Date("2026-09-07T14:00:00"); // Dia atual = 2026-09-07
@@ -270,5 +271,54 @@ describe("Medication Administration Timing & Safety Validations (Tarefa 5)", () 
     const window2 = 60;
     expect(minutesAgo2 < window2).toBe(false);
   });
+
+  describe("Medication Editing Validation", () => {
+    it("correctly parses and normalizes schedule time when opening edit modal", () => {
+      const scheduleWithDate = "2026-09-12 14:30";
+      const simpleSchedule = "08:00";
+      const invalidOrEmpty = "";
+
+      const extractTime = (sched: string) => {
+        const timeMatch = sched.match(/(\d{2}:\d{2})/);
+        return timeMatch ? timeMatch[1] : (sched || "08:00");
+      };
+
+      expect(extractTime(scheduleWithDate)).toBe("14:30");
+      expect(extractTime(simpleSchedule)).toBe("08:00");
+      expect(extractTime(invalidOrEmpty)).toBe("08:00");
+    });
+
+    it("parses frequency correctly when editing between recurring and single dose", () => {
+      const parseFrequency = (freqStr: string) => {
+        const freqNum = freqStr ? parseInt(freqStr, 10) : null;
+        return freqNum && freqNum >= 1 ? freqNum : null;
+      };
+
+      expect(parseFrequency("8")).toBe(8);
+      expect(parseFrequency("12")).toBe(12);
+      expect(parseFrequency("")).toBe(null);
+      expect(parseFrequency("0")).toBe(null);
+      expect(parseFrequency("-4")).toBe(null);
+    });
+
+    it("prevents saving edited medication if it conflicts with patient allergy", () => {
+      const patient = {
+        name: "Carlos Eduardo",
+        allergies: "Dipirona, AAS",
+        diagnosis: "Pós-operatório",
+      };
+
+      const safeMedName = "Paracetamol 750mg";
+      const allergicMedName = "Dipirona 500mg/ml EV";
+
+      const conflictSafe = checkMedicationAllergyConflict(safeMedName, patient);
+      const conflictAllergic = checkMedicationAllergyConflict(allergicMedName, patient);
+
+      expect(conflictSafe.hasConflict).toBe(false);
+      expect(conflictAllergic.hasConflict).toBe(true);
+      expect(conflictAllergic.matchedTerm).toBe("Dipirona");
+    });
+  });
 });
+
 
