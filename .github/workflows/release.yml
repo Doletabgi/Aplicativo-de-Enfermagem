@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: Versão 1.0.0 - Prontuário de Enfermagem Mobile
+          body: |
+            ## Prontuário Eletrônico de Enfermagem Mobile - Versão 1.0.0 🩺📱
+
+            Primeira versão oficial do Prontuário Eletrônico de Enfermagem Mobile.
+
+            ### Principais Funcionalidades:
+            - **100% Offline & Local-First**: SQLite local no dispositivo, garantindo total privacidade e funcionamento sem internet.
+            - **Segurança do Paciente**: Verificador automático de conflito e alergias medicamentosas em tempo real.
+            - **Ditado Clínico por Voz**: Registro facilitado de sinais vitais e notas à beira-leito com reconhecimento de voz.
+            - **Alarmes e Notificações Locais**: Lembretes e avisos sonoros de medicamentos programados no Android.
+            - **Preceptor e IA Clínica**: Integração com Groq e contingência 100% offline para protocolos de emergência (PCR, Sepse, LPP, NANDA-I, Gotejamento).
+            - **Passagem de Plantão**: Relatórios consolidando evolução clínica, exportação para impressão/PDF e QR Code.
+
+            ---
+            ### Download direto do APK:
+            Baixe o arquivo **prontuario-enfermagem-debug.apk** abaixo e instale diretamente no seu aparelho Android.
+          files: prontuario-enfermagem-debug.apk
